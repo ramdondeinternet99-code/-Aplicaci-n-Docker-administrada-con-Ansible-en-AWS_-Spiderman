@@ -20,7 +20,7 @@ resource "aws_ecr_repository" "app" {
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
 
-  policy = jsonencode({
+  policy = jsonencode({ # Linea para testeo
     rules = [{
       rulePriority = 1
       description  = "Conservar solo las ultimas 5 imagenes"
