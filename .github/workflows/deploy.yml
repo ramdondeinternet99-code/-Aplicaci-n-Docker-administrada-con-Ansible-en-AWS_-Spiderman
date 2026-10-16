@@ -1,0 +1,131 @@
+name: Deploy (Ansible, reutilizable)
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag de la imagen a desplegar"
+        default: "latest"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  PROJECT: taller2-ansible-docker
+  ENVIRONMENT: dev
+  ANSIBLE_CONFIG: ansible/ansible.cfg
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login en ECR (para obtener el registry)
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Ansible
+        run: |
+          pip install ansible-core==2.17.5
+          ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Localizar la instancia y el security group
+        id: target
+        run: |
+          IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=$PROJECT" "Name=tag:Environment,Values=$ENVIRONMENT" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=${PROJECT}-sg" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+          if [ "$IP" = "None" ] || [ "$SG" = "None" ]; then
+            echo "No se encontro la instancia. Ejecuta primero el workflow de infraestructura."; exit 1
+          fi
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "sg=$SG" >> "$GITHUB_OUTPUT"
+
+      - name: Preparar llave SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+
+      - name: Abrir SSH temporalmente solo para este runner
+        run: |
+          RUNNER_IP=$(curl -s https://checkip.amazonaws.com | tr -d '\n')
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${{ steps.target.outputs.sg }}" \
+            --protocol tcp --port 22 --cidr "${RUNNER_IP}/32" || true
+
+      - name: Ejecutar playbook (primera pasada)
+        run: |
+          ansible-playbook ansible/playbook.yml \
+            -i "${{ steps.target.outputs.ip }}," \
+            -u ec2-user --private-key ~/.ssh/ec2_key.pem \
+            -e "ecr_registry=${{ steps.ecr.outputs.registry }}" \
+            -e "ecr_repository=${PROJECT}" \
+            -e "image_tag=${{ inputs.image_tag }}" \
+            -e "aws_region=${AWS_REGION}" \
+            -e "app_env=${ENVIRONMENT}" | tee ansible-run1.log
+
+      - name: Verificar idempotencia (segunda pasada debe dar changed=0)
+        run: |
+          ansible-playbook ansible/playbook.yml \
+            -i "${{ steps.target.outputs.ip }}," \
+            -u ec2-user --private-key ~/.ssh/ec2_key.pem \
+            -e "ecr_registry=${{ steps.ecr.outputs.registry }}" \
+            -e "ecr_repository=${PROJECT}" \
+            -e "image_tag=${{ inputs.image_tag }}" \
+            -e "aws_region=${AWS_REGION}" \
+            -e "app_env=${ENVIRONMENT}" | tee ansible-run2.log
+          grep -E "changed=0" ansible-run2.log
+
+      - name: Cerrar SSH (siempre)
+        if: always()
+        run: |
+          if [ -n "${RUNNER_IP:-}" ]; then
+            aws ec2 revoke-security-group-ingress \
+              --group-id "${{ steps.target.outputs.sg }}" \
+              --protocol tcp --port 22 --cidr "${RUNNER_IP}/32" || true
+          fi
+          rm -f ~/.ssh/ec2_key.pem
+
+      - name: Resumen
+        run: |
+          {
+            echo "### Despliegue exitoso"
+            echo "- URL: http://${{ steps.target.outputs.ip }}"
+            echo "- Imagen: ${{ inputs.image_tag }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar evidencia de Ansible
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-ansible
+          path: |
+            ansible-run1.log
+            ansible-run2.log
