@@ -1,16 +1,22 @@
 ---
-- name: Instalar Docker y pip
+- name: Limpiar librerias conflictivas de pip en /usr/local si existen
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/lib/python3.9/site-packages/docker
+    - /usr/local/lib/python3.9/site-packages/urllib3
+    - /usr/local/lib/python3.9/site-packages/requests
+    - /usr/local/lib64/python3.9/site-packages/docker
+    - /usr/local/lib64/python3.9/site-packages/urllib3
+    - /usr/local/lib64/python3.9/site-packages/requests
+
+- name: Instalar Docker y el SDK de Docker para Python
   ansible.builtin.dnf:
     name:
       - docker
-      - python3-pip
+      - python3-docker
     state: present
-
-- name: Instalar el SDK de Docker para Python (lo usa Ansible)
-  ansible.builtin.pip:
-    name: docker==7.1.0
-    executable: /usr/bin/pip3
-    extra_args: --ignore-installed
 
 - name: Configurar rotacion de logs de Docker
   ansible.builtin.copy:
@@ -36,3 +42,6 @@
     name: ec2-user
     groups: docker
     append: true
+
+- name: Aplicar reinicio de Docker antes de desplegar la app
+  ansible.builtin.meta: flush_handlers
