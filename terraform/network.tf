@@ -1,4 +1,5 @@
 resource "aws_vpc" "main" {
+  #checkov:skip=CKV2_AWS_11:Flow logs omitidos en el taller para limitar costos
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -17,6 +18,7 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_subnet" "public" {
+  #checkov:skip=CKV_AWS_130:La subred es publica a proposito; la IP publica se asigna con una Elastic IP
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   availability_zone       = "${var.region}a"
@@ -43,9 +45,13 @@ resource "aws_route_table_association" "public" {
 # El puerto 22 NO tiene regla permanente abierta al mundo: solo admin_cidr.
 # (El pipeline abre temporalmente la IP del runner y la revoca al terminar.)
 resource "aws_security_group" "app" {
+  #checkov:skip=CKV_AWS_260:El puerto 80 debe ser publico porque es la aplicacion web
   name        = "${var.project}-sg"
   description = "Acceso HTTP publico y SSH restringido"
   vpc_id      = aws_vpc.main.id
+
+  # El puerto 80 es publico porque es la aplicacion web
+  #trivy:ignore:AVD-AWS-0107
   ingress {
     description = "HTTP publico"
     from_port   = 80
@@ -61,6 +67,9 @@ resource "aws_security_group" "app" {
     protocol    = "tcp"
     cidr_blocks = [var.admin_cidr]
   }
+
+  # Solo HTTPS de salida (dnf, ECR, PyPI, Docker Hub)
+  #trivy:ignore:AVD-AWS-0104
   egress {
     description = "HTTPS de salida"
     from_port   = 443
