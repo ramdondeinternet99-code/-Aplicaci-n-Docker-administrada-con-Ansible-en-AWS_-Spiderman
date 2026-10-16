@@ -1,0 +1,44 @@
+---
+- name: Autenticar Docker contra ECR (usa el rol IAM de la instancia)
+  ansible.builtin.shell: |
+    set -o pipefail
+    aws ecr get-login-password --region {{ aws_region }} | \
+      docker login --username AWS --password-stdin {{ ecr_registry }}
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Descargar la imagen de la aplicacion
+  community.docker.docker_image:
+    name: "{{ ecr_registry }}/{{ ecr_repository }}"
+    tag: "{{ image_tag }}"
+    source: pull
+    force_source: true
+
+- name: Ejecutar el contenedor de la aplicacion
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ ecr_registry }}/{{ ecr_repository }}:{{ image_tag }}"
+    state: started
+    restart_policy: unless-stopped
+    published_ports:
+      - "{{ host_port }}:{{ container_port }}"
+    env:
+      APP_ENV: "{{ app_env }}"
+      APP_TEAM: "{{ app_team }}"
+
+- name: Limpiar imagenes huerfanas
+  community.docker.docker_prune:
+    images: true
+    images_filters:
+      dangling: true
+
+- name: Verificar que la aplicacion responde
+  ansible.builtin.uri:
+    url: "http://localhost:{{ host_port }}/health"
+    status_code: 200
+  register: health
+  retries: 10
+  delay: 3
+  until: health.status == 200
+  changed_when: false

@@ -1,6 +1,3 @@
-# -Aplicaci-n-Docker-administrada-con-Ansible-en-AWS_-Spiderman
- Taller 2: Aplicación Docker administrada con Ansible en AWS_ Spiderman
-<<<<<<< HEAD
 # Taller 2 – Aplicación Docker administrada con Ansible en AWS
 # Grupo spiderman
 
