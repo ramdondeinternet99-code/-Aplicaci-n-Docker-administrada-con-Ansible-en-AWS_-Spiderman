@@ -25,6 +25,7 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
+      Course      = "Infraestructura-para-TI"
     }
   }
 }
