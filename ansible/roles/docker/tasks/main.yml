@@ -9,7 +9,8 @@
 - name: Instalar el SDK de Docker para Python (lo usa Ansible)
   ansible.builtin.pip:
     name: docker==7.1.0
-    executable: pip3
+    executable: /usr/bin/pip3
+    extra_args: --ignore-installed
 
 - name: Configurar rotacion de logs de Docker
   ansible.builtin.copy:
