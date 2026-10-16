@@ -16,7 +16,7 @@ on:
 permissions:
   id-token: write
   contents: read
-  
+
 defaults:
   run:
     shell: bash
@@ -39,7 +39,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login en ECR (para obtener el registry)
@@ -61,28 +61,42 @@ jobs:
           IP=$(aws ec2 describe-instances \
             --filters "Name=tag:Project,Values=$PROJECT" "Name=tag:Environment,Values=$ENVIRONMENT" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=$PROJECT" "Name=tag:Environment,Values=$ENVIRONMENT" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
           SG=$(aws ec2 describe-security-groups \
             --filters "Name=group-name,Values=${PROJECT}-sg" \
             --query 'SecurityGroups[0].GroupId' --output text)
-          if [ "$IP" = "None" ] || [ "$SG" = "None" ]; then
+          if [ "$IP" = "None" ] || [ "$ID" = "None" ] || [ "$SG" = "None" ]; then
             echo "No se encontro la instancia. Ejecuta primero el workflow de infraestructura."; exit 1
           fi
           echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
           echo "sg=$SG" >> "$GITHUB_OUTPUT"
 
+      - name: Esperar a que la instancia pase los status checks
+        run: aws ec2 wait instance-status-ok --instance-ids "${{ steps.target.outputs.id }}"
+
       - name: Preparar llave SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key.pem
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/ec2_key.pem
           chmod 600 ~/.ssh/ec2_key.pem
 
       - name: Abrir SSH temporalmente solo para este runner
         run: |
           RUNNER_IP=$(curl -s https://checkip.amazonaws.com | tr -d '\n')
           echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "${{ steps.target.outputs.sg }}" \
-            --protocol tcp --port 22 --cidr "${RUNNER_IP}/32" || true
+          echo "IP del runner: $RUNNER_IP"
+          if ! OUT=$(aws ec2 authorize-security-group-ingress \
+              --group-id "${{ steps.target.outputs.sg }}" \
+              --protocol tcp --port 22 --cidr "${RUNNER_IP}/32" 2>&1); then
+            echo "$OUT"
+            echo "$OUT" | grep -q "InvalidPermission.Duplicate" || exit 1
+          fi
+          sleep 10
 
       - name: Ejecutar playbook (primera pasada)
         run: |
