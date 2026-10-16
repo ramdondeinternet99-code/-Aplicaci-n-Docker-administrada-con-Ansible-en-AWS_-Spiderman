@@ -2,12 +2,15 @@
 - name: Configurar Docker y desplegar la aplicacion
   hosts: all
   become: true
-  gather_facts: true
+  gather_facts: false
 
   pre_tasks:
     - name: Esperar a que la instancia acepte SSH
       ansible.builtin.wait_for_connection:
         timeout: 300
+
+    - name: Recolectar facts
+      ansible.builtin.setup:
 
   roles:
     - role: docker
