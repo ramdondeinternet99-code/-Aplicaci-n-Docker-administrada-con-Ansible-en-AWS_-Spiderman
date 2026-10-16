@@ -18,7 +18,7 @@ def index():
 <style>body{{font-family:system-ui;margin:3rem auto;max-width:640px;line-height:1.6}}
 code{{background:#eee;padding:2px 6px;border-radius:4px}}</style></head>
 <body>
-<h1>Taller 2: Docker + Ansible en AWS - Cambio de prueba</h1>
+<h1>Taller 2: Docker + Ansible en AWS - Cambio de prueba v2 para el test</h1>
 <p>Equipo: <b>{TEAM}</b></p>
 <p>Ambiente: <code>{ENVIRONMENT}</code></p>
 <p>Versión desplegada: <code>{VERSION[:12]}</code></p>
