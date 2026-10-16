@@ -66,11 +66,13 @@ jobs:
           echo "ip=$IP" >> "$GITHUB_OUTPUT"
           echo "sg=$SG" >> "$GITHUB_OUTPUT"
 
-      - name: Preparar llave SSH
+      - name: Abrir SSH temporalmente solo para este runner
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key.pem
-          chmod 600 ~/.ssh/ec2_key.pem
+          RUNNER_IP=$(curl -s https://checkip.amazonaws.com | tr -d '\n')
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${{ steps.target.outputs.sg }}" \
+            --protocol tcp --port 22 --cidr "${RUNNER_IP}/32"
 
       - name: Abrir SSH temporalmente solo para este runner
         run: |
