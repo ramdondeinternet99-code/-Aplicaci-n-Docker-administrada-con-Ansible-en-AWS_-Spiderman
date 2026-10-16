@@ -54,6 +54,8 @@ resource "aws_security_group" "app" {
   description = "Acceso HTTP publico y SSH restringido"
   vpc_id      = aws_vpc.main.id
 
+  # El puerto 80 es publico porque es la aplicacion web
+  #trivy:ignore:AVD-AWS-0107
   ingress {
     description = "HTTP publico"
     from_port   = 80
@@ -70,13 +72,17 @@ resource "aws_security_group" "app" {
     cidr_blocks = [var.admin_cidr]
   }
 
+  # Solo HTTPS de salida (dnf, ECR, PyPI, Docker Hub)
+  #trivy:ignore:AVD-AWS-0104
   egress {
-    description = "Salida a internet (dnf, ECR, Docker)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS de salida"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  tags = { Name = "${var.project}-sg" }
+}
   tags = { Name = "${var.project}-sg" }
 }
