@@ -1,5 +1,7 @@
+# Se usa 'latest' mutable ademas del tag por SHA (decision documentada en el README)
+#trivy:ignore:AVD-AWS-0031
 resource "aws_ecr_repository" "app" {
-  #checkov:skip=CKV_AWS_51:Se usa el tag mutable 'latest' ademas del tag inmutable por SHA
+  #checkov:skip=CKV_AWS_51:Se usa el tag mutable 'latest' ademas del tag por SHA de commit
   #checkov:skip=CKV_AWS_136:Cifrado AES256 administrado por AWS; KMS propio genera costo adicional
   name                 = var.project
   image_tag_mutability = "MUTABLE"
