@@ -66,13 +66,14 @@ jobs:
           echo "ip=$IP" >> "$GITHUB_OUTPUT"
           echo "sg=$SG" >> "$GITHUB_OUTPUT"
 
-      - name: Abrir SSH temporalmente solo para este runner
+      - name: Preparar llave SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          RUNNER_IP=$(curl -s https://checkip.amazonaws.com | tr -d '\n')
-          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "${{ steps.target.outputs.sg }}" \
-            --protocol tcp --port 22 --cidr "${RUNNER_IP}/32"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keygen -y -f ~/.ssh/ec2_key.pem
 
       - name: Abrir SSH temporalmente solo para este runner
         run: |
@@ -87,22 +88,22 @@ jobs:
           ansible-playbook ansible/playbook.yml \
             -i "${{ steps.target.outputs.ip }}," \
             -u ec2-user --private-key ~/.ssh/ec2_key.pem \
-            -e "ecr_registry=${{ steps.ecr.outputs.registry }}" \
-            -e "ecr_repository=${PROJECT}" \
-            -e "image_tag=${{ inputs.image_tag }}" \
-            -e "aws_region=${AWS_REGION}" \
-            -e "app_env=${ENVIRONMENT}" | tee ansible-run1.log
+            -e "webapp_ecr_registry=${{ steps.ecr.outputs.registry }}" \
+            -e "webapp_ecr_repository=${PROJECT}" \
+            -e "webapp_image_tag=${{ inputs.image_tag }}" \
+            -e "webapp_aws_region=${AWS_REGION}" \
+            -e "webapp_app_env=${ENVIRONMENT}" | tee ansible-run1.log
 
       - name: Verificar idempotencia (segunda pasada debe dar changed=0)
         run: |
           ansible-playbook ansible/playbook.yml \
             -i "${{ steps.target.outputs.ip }}," \
             -u ec2-user --private-key ~/.ssh/ec2_key.pem \
-            -e "ecr_registry=${{ steps.ecr.outputs.registry }}" \
-            -e "ecr_repository=${PROJECT}" \
-            -e "image_tag=${{ inputs.image_tag }}" \
-            -e "aws_region=${AWS_REGION}" \
-            -e "app_env=${ENVIRONMENT}" | tee ansible-run2.log
+            -e "webapp_ecr_registry=${{ steps.ecr.outputs.registry }}" \
+            -e "webapp_ecr_repository=${PROJECT}" \
+            -e "webapp_image_tag=${{ inputs.image_tag }}" \
+            -e "webapp_aws_region=${AWS_REGION}" \
+            -e "webapp_app_env=${ENVIRONMENT}" | tee ansible-run2.log
           grep -E "changed=0" ansible-run2.log
 
       - name: Cerrar SSH (siempre)
