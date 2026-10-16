@@ -66,6 +66,8 @@ resource "aws_s3_bucket_versioning" "state" {
   }
 }
 
+# Cifrado SSE-S3 (AES256); una llave KMS propia genera costo adicional en un taller
+#trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
   rule {
