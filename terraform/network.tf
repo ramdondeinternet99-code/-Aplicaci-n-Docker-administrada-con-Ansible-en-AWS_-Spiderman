@@ -1,7 +1,3 @@
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
 resource "aws_vpc" "main" {
   #checkov:skip=CKV2_AWS_11:Flow logs omitidos en el taller para limitar costos
   cidr_block           = var.vpc_cidr
@@ -25,7 +21,7 @@ resource "aws_subnet" "public" {
   #checkov:skip=CKV_AWS_130:La subred es publica a proposito; la IP publica se asigna con una Elastic IP
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  availability_zone       = "${var.region}a"
   map_public_ip_on_launch = false
   tags                    = { Name = "${var.project}-public" }
 }
@@ -54,6 +50,8 @@ resource "aws_security_group" "app" {
   description = "Acceso HTTP publico y SSH restringido"
   vpc_id      = aws_vpc.main.id
 
+  # El puerto 80 es publico porque es la aplicacion web
+  #trivy:ignore:AVD-AWS-0107
   ingress {
     description = "HTTP publico"
     from_port   = 80
@@ -70,11 +68,13 @@ resource "aws_security_group" "app" {
     cidr_blocks = [var.admin_cidr]
   }
 
+  # Solo HTTPS de salida (dnf, ECR, PyPI, Docker Hub)
+  #trivy:ignore:AVD-AWS-0104
   egress {
-    description = "Salida a internet (dnf, ECR, Docker)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS de salida"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
