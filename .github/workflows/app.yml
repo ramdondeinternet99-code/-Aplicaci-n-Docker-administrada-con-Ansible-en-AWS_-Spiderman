@@ -22,9 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Mostrar claims del OIDC (diagnóstico)
+        run: |
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          PAYLOAD=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          # rellenar el padding de base64
+          while [ $(( ${#PAYLOAD} % 4 )) -ne 0 ]; do PAYLOAD="${PAYLOAD}="; done
+          echo "$PAYLOAD" | base64 -d | jq '{sub, aud, repository, ref}'
+          
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login en ECR
@@ -44,7 +53,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy - escanear imagen (falla con HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: local/app:scan
           format: table
