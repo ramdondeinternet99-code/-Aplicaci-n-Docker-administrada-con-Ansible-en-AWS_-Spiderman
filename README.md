@@ -143,13 +143,6 @@ Después, para borrar también el estado y el OIDC: vacía el bucket (incluidas 
 - **Limitaciones:** una sola instancia (sin alta disponibilidad), HTTP sin TLS, `host_key_checking=False` en CI, el rol de CI usa `ec2:*` acotado por región.
 - **Mejoras:** ALB + HTTPS (ACM), Auto Scaling, rollback automático, Session Manager en lugar de SSH, restringir el `sub` del OIDC a `ref:refs/heads/main`.
 
-## 13. Lista de evidencias para entregar
-- [ ] URL del repositorio y de la aplicación
-- [ ] Capturas de Actions (infra, app, ansible, security) en verde
-- [ ] Artefactos: Checkov, Trivy imagen, Trivy repo, Ansible (2 corridas, `changed=0`), Terraform apply
-- [ ] Captura de ECR con la imagen y de la EC2 con tags
-- [ ] Cambio de app desplegado + cambio de infra aplicado
-- [ ] Captura del destroy
 
 # -Aplicaci-n-Docker-administrada-con-Ansible-en-AWS_-Spiderman
  Taller 2: Aplicación Docker administrada con Ansible en AWS_ Spiderman
