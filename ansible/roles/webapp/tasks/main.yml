@@ -42,4 +42,3 @@
   delay: 3
   until: webapp_health.status == 200
   changed_when: false
-  
