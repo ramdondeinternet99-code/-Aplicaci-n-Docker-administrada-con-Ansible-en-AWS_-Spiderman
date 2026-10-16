@@ -150,7 +150,7 @@ Después, para borrar también el estado y el OIDC: vacía el bucket (incluidas 
 - [ ] Captura de ECR con la imagen y de la EC2 con tags
 - [ ] Cambio de app desplegado + cambio de infra aplicado
 - [ ] Captura del destroy
-=======
+
 # -Aplicaci-n-Docker-administrada-con-Ansible-en-AWS_-Spiderman
  Taller 2: Aplicación Docker administrada con Ansible en AWS_ Spiderman
->>>>>>> 324371f37e48b81f4af9044b86f7793469a77698
+ 324371f37e48b81f4af9044b86f7793469a77698
