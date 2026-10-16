@@ -68,10 +68,10 @@ jobs:
 
       - name: Preparar llave SSH
         env:
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/ec2_key.pem
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/ec2_key.pem
           chmod 600 ~/.ssh/ec2_key.pem
           ssh-keygen -y -f ~/.ssh/ec2_key.pem
 
