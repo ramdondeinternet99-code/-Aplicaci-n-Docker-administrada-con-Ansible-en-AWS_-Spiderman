@@ -1,0 +1,102 @@
+name: Infra (Terraform)
+
+on:
+  pull_request:
+    paths: ["terraform/**", ".github/workflows/infra.yml"]
+  push:
+    branches: [main]
+    paths: ["terraform/**", ".github/workflows/infra.yml"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.10.5"
+  TF_VAR_region: ${{ vars.AWS_REGION }}
+  TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
+  TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+  TF_VAR_budget_email: ${{ vars.BUDGET_EMAIL }}
+
+jobs:
+  validate:
+    name: fmt, validate y Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt
+        run: terraform -chdir=terraform fmt -check -recursive
+
+      - name: terraform validate
+        run: |
+          terraform -chdir=terraform init -backend=false
+          terraform -chdir=terraform validate
+
+      - name: Checkov (seguridad de la infraestructura)
+        run: |
+          pip install checkov
+          checkov -d terraform --framework terraform --compact | tee checkov-report.txt
+
+      - name: Guardar evidencia de Checkov
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-checkov
+          path: checkov-report.txt
+
+  apply:
+    name: terraform plan y apply
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-apply
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: terraform plan
+        run: terraform -chdir=terraform plan -input=false -out=tfplan | tee plan.txt
+
+      - name: terraform apply
+        run: terraform -chdir=terraform apply -input=false -auto-approve tfplan | tee apply.txt
+
+      - name: Resumen de salidas
+        run: |
+          {
+            echo "### Salidas de Terraform"
+            echo '```'
+            terraform -chdir=terraform output
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar evidencia del apply
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-terraform-apply
+          path: |
+            plan.txt
+            apply.txt

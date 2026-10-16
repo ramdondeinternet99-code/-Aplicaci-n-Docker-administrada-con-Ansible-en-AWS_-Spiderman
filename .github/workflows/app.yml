@@ -1,0 +1,84 @@
+name: App (build, Trivy, ECR y despliegue)
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/app.yml", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ECR_REPOSITORY: taller2-ansible-docker
+
+jobs:
+  build:
+    name: Construir, escanear con Trivy y publicar
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login en ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir imagen (local, sin publicar)
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          load: true
+          tags: local/app:scan
+          build-args: APP_VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy - escanear imagen (falla con HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: local/app:scan
+          format: table
+          output: trivy-imagen.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Mostrar reporte de Trivy
+        if: always()
+        run: cat trivy-imagen.txt || true
+
+      - name: Guardar evidencia de Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-trivy-imagen
+          path: trivy-imagen.txt
+
+      - name: Publicar imagen en ECR (solo si Trivy paso)
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          build-args: APP_VERSION=${{ github.sha }}
+          cache-from: type=gha
+
+  deploy:
+    name: Desplegar con Ansible
+    needs: build
+    uses: ./.github/workflows/deploy.yml
+    with:
+      image_tag: ${{ needs.build.outputs.image_tag }}
+    secrets: inherit

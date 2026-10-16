@@ -1,0 +1,40 @@
+name: Destruir infraestructura
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: "Escribe DESTRUIR para confirmar"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    if: inputs.confirmar == 'DESTRUIR'
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+      TF_VAR_budget_email: ${{ vars.BUDGET_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - name: terraform destroy
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+          terraform -chdir=terraform destroy -input=false -auto-approve
