@@ -35,6 +35,6 @@
     name: ec2-user
     groups: docker
     append: true
-    
+
 - name: Aplicar reinicio de Docker antes de desplegar la app
   ansible.builtin.meta: flush_handlers
