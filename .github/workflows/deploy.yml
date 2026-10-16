@@ -16,6 +16,10 @@ on:
 permissions:
   id-token: write
   contents: read
+  
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: deploy-ec2
