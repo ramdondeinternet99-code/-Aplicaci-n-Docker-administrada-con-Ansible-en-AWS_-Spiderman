@@ -44,7 +44,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy - escanear imagen (falla con HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.76.0
+        uses: aquasecurity/trivy-action@main
         with:
           image-ref: local/app:scan
           format: table
